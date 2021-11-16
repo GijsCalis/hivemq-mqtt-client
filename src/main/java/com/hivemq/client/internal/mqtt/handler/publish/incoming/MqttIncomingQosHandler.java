@@ -104,6 +104,7 @@ public class MqttIncomingQosHandler extends MqttSessionAwareHandler {
     }
 
     private void readPublish(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttStatefulPublish publish) {
+        LOGGER.debug("Read PUBLISH {} from {}", publish, ctx.channel().remoteAddress());
         switch (publish.stateless().getQos()) {
             case AT_MOST_ONCE:
                 readPublishQos0(publish);
@@ -271,14 +272,17 @@ public class MqttIncomingQosHandler extends MqttSessionAwareHandler {
     }
 
     private void writePubAck(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttPubAck pubAck) {
+        LOGGER.debug("Write PUBACK {} to {}", pubAck, ctx.channel().remoteAddress());
         ctx.writeAndFlush(pubAck, ctx.voidPromise());
     }
 
     private void writePubRec(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttPubRec pubRec) {
+        LOGGER.debug("Write PUBREC {} to {}", pubRec, ctx.channel().remoteAddress());
         ctx.writeAndFlush(pubRec, ctx.voidPromise());
     }
 
     private void readPubRel(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttPubRel pubRel) {
+        LOGGER.debug("Read PUBREL {} from {}", pubRel, ctx.channel().remoteAddress());
         final Object prevMessage = messages.remove(pubRel.getPacketIdentifier());
         if (prevMessage instanceof MqttPubRec) { // normal case
             writePubComp(ctx, buildPubComp(new MqttPubCompBuilder(pubRel)));
@@ -305,6 +309,7 @@ public class MqttIncomingQosHandler extends MqttSessionAwareHandler {
     }
 
     private void writePubComp(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttPubComp pubComp) {
+        LOGGER.debug("Write PUBCOMP {} to {}", pubComp, ctx.channel().remoteAddress());
         ctx.writeAndFlush(pubComp, ctx.voidPromise());
     }
 

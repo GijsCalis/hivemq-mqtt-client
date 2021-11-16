@@ -16,6 +16,8 @@
 
 package com.hivemq.client.internal.mqtt.handler.disconnect;
 
+import com.hivemq.client.internal.logging.InternalLogger;
+import com.hivemq.client.internal.logging.InternalLoggerFactory;
 import com.hivemq.client.internal.mqtt.message.disconnect.MqttDisconnect;
 import com.hivemq.client.internal.mqtt.message.disconnect.MqttDisconnectBuilder;
 import com.hivemq.client.mqtt.exceptions.ConnectionClosedException;
@@ -32,6 +34,8 @@ import org.jetbrains.annotations.NotNull;
  * @author Silvio Giebl
  */
 public final class MqttDisconnectUtil {
+
+    private static final @NotNull InternalLogger LOGGER = InternalLoggerFactory.getLogger(MqttDisconnectUtil.class);
 
     /**
      * Closes the channel from the client side without sending a DISCONNECT message.
@@ -98,7 +102,8 @@ public final class MqttDisconnectUtil {
 
     static void fireDisconnectEvent(
             final @NotNull Channel channel, final @NotNull MqttDisconnectEvent disconnectEvent) {
-
+        LOGGER.trace("Fire DISCONNECT event: source: {}, cause: {}", disconnectEvent.getSource(),
+                disconnectEvent.getCause());
         channel.pipeline().fireUserEventTriggered(disconnectEvent);
     }
 

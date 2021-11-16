@@ -16,6 +16,8 @@
 
 package com.hivemq.client.internal.mqtt.handler.auth;
 
+import com.hivemq.client.internal.logging.InternalLogger;
+import com.hivemq.client.internal.logging.InternalLoggerFactory;
 import com.hivemq.client.internal.mqtt.exceptions.MqttClientStateExceptions;
 import com.hivemq.client.internal.mqtt.handler.disconnect.MqttDisconnectEvent;
 import com.hivemq.client.internal.mqtt.handler.disconnect.MqttDisconnectUtil;
@@ -45,6 +47,8 @@ import static com.hivemq.client.mqtt.mqtt5.message.auth.Mqtt5AuthReasonCode.REAU
  */
 @ConnectionScope
 public class MqttReAuthHandler extends AbstractMqttAuthHandler {
+
+    private static final @NotNull InternalLogger LOGGER = InternalLoggerFactory.getLogger(MqttReAuthHandler.class);
 
     private @Nullable CompletableFlow flow;
 
@@ -81,7 +85,9 @@ public class MqttReAuthHandler extends AbstractMqttAuthHandler {
         state = MqttAuthState.IN_PROGRESS_INIT;
         callMechanismFuture(() -> authMechanism.onReAuth(clientConfig, authBuilder), ctx -> {
             state = MqttAuthState.WAIT_FOR_SERVER;
-            ctx.writeAndFlush(authBuilder.build()).addListener(this);
+            MqttAuth auth = authBuilder.build();
+            LOGGER.debug("Write re-AUTH {}", auth);
+            ctx.writeAndFlush(auth).addListener(this);
         }, (ctx, throwable) -> {
             callMechanism(() -> authMechanism.onReAuthError(clientConfig, throwable));
             state = MqttAuthState.NONE;
@@ -113,6 +119,7 @@ public class MqttReAuthHandler extends AbstractMqttAuthHandler {
      */
     @Override
     void readAuthSuccess(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttAuth auth) {
+        LOGGER.debug("Read AUTH success {}", auth);
         if (state != MqttAuthState.WAIT_FOR_SERVER) {
             MqttDisconnectUtil.disconnect(ctx.channel(), Mqtt5DisconnectReasonCode.PROTOCOL_ERROR,
                     new Mqtt5AuthException(auth,
@@ -150,6 +157,7 @@ public class MqttReAuthHandler extends AbstractMqttAuthHandler {
      */
     @Override
     void readReAuth(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttAuth auth) {
+        LOGGER.debug("Read re-AUTH {}", auth);
         if (!clientConfig.getAdvancedConfig().isAllowServerReAuth()) {
             MqttDisconnectUtil.disconnect(ctx.channel(), Mqtt5DisconnectReasonCode.PROTOCOL_ERROR,
                     new Mqtt5AuthException(auth, "Must not receive AUTH with reason code REAUTHENTICATE."));
@@ -166,7 +174,9 @@ public class MqttReAuthHandler extends AbstractMqttAuthHandler {
         state = MqttAuthState.IN_PROGRESS_INIT;
         callMechanismFutureResult(() -> authMechanism.onServerReAuth(clientConfig, auth, authBuilder), ctx2 -> {
             state = MqttAuthState.WAIT_FOR_SERVER;
-            ctx2.writeAndFlush(authBuilder.build()).addListener(this);
+            MqttAuth auth2 = authBuilder.build();
+            LOGGER.debug("Write AUTH {}", auth2);
+            ctx2.writeAndFlush(auth2).addListener(this);
 
         }, (ctx2, throwable) -> MqttDisconnectUtil.disconnect(ctx2.channel(), Mqtt5DisconnectReasonCode.NOT_AUTHORIZED,
                 new Mqtt5AuthException(auth, "Server AUTH with reason code REAUTHENTICATE not accepted.")));
@@ -181,6 +191,7 @@ public class MqttReAuthHandler extends AbstractMqttAuthHandler {
      * @param disconnect the incoming DISCONNECT message.
      */
     private void readDisconnect(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttDisconnect disconnect) {
+        LOGGER.trace("Read DISCONNECT {}", disconnect);
         cancelTimeout();
 
         if (state != MqttAuthState.NONE) {

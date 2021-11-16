@@ -17,6 +17,8 @@
 package com.hivemq.client.internal.mqtt.handler.publish.incoming;
 
 import com.hivemq.client.internal.annotations.CallByThread;
+import com.hivemq.client.internal.logging.InternalLogger;
+import com.hivemq.client.internal.logging.InternalLoggerFactory;
 import com.hivemq.client.internal.mqtt.MqttClientConfig;
 import com.hivemq.client.internal.mqtt.handler.util.FlowWithEventLoop;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
@@ -36,6 +38,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 abstract class MqttIncomingPublishFlow extends FlowWithEventLoop
         implements Emitter<Mqtt5Publish>, Subscription, Runnable {
+
+    private static final @NotNull InternalLogger LOGGER = InternalLoggerFactory.getLogger(MqttIncomingPublishFlow.class);
 
     private static final int STATE_NO_NEW_REQUESTS = 0;
     private static final int STATE_NEW_REQUESTS = 1;
@@ -72,6 +76,7 @@ abstract class MqttIncomingPublishFlow extends FlowWithEventLoop
     @CallByThread("Netty EventLoop")
     @Override
     public void onNext(final @NotNull Mqtt5Publish result) {
+        LOGGER.trace("onNext: {}, {}", result, subscriber);
         subscriber.onNext(result);
         if (requested != Long.MAX_VALUE) {
             requested--;

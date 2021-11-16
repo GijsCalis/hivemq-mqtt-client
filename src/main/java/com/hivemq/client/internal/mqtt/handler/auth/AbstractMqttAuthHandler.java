@@ -125,6 +125,7 @@ abstract class AbstractMqttAuthHandler extends MqttTimeoutInboundHandler impleme
      * @param auth the received AUTH message.
      */
     private void readAuthContinue(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttAuth auth) {
+        LOGGER.debug("Read AUTH continue {}", auth);
         if (state != MqttAuthState.WAIT_FOR_SERVER) {
             MqttDisconnectUtil.disconnect(ctx.channel(), Mqtt5DisconnectReasonCode.PROTOCOL_ERROR,
                     new Mqtt5AuthException(auth, "Must not receive AUTH with reason code CONTINUE_AUTHENTICATION " +
@@ -136,7 +137,9 @@ abstract class AbstractMqttAuthHandler extends MqttTimeoutInboundHandler impleme
         state = MqttAuthState.IN_PROGRESS_RESPONSE;
         callMechanismFutureResult(() -> authMechanism.onContinue(clientConfig, auth, authBuilder), ctx2 -> {
             state = MqttAuthState.WAIT_FOR_SERVER;
-            ctx2.writeAndFlush(authBuilder.build()).addListener(this);
+            MqttAuth auth2 = authBuilder.build();
+            LOGGER.debug("Write AUTH {}", auth2);
+            ctx2.writeAndFlush(auth2).addListener(this);
 
         }, (ctx2, throwable) -> MqttDisconnectUtil.disconnect(ctx2.channel(), Mqtt5DisconnectReasonCode.NOT_AUTHORIZED,
                 new Mqtt5AuthException(auth, "Server auth not accepted.")));

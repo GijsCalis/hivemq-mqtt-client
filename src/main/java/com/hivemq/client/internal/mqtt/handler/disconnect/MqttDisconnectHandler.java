@@ -91,6 +91,7 @@ public class MqttDisconnectHandler extends MqttConnectionAwareHandler {
     }
 
     private void readDisconnect(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttDisconnect disconnect) {
+        LOGGER.debug("Read DISCONNECT {} from {}", disconnect, ctx.channel().remoteAddress());
         if (state == null) {
             state = STATE_CLOSED;
             fireDisconnectEvent(ctx.channel(), new Mqtt5DisconnectException(disconnect, "Server sent DISCONNECT."),
@@ -99,6 +100,7 @@ public class MqttDisconnectHandler extends MqttConnectionAwareHandler {
     }
 
     private void readConnAck(final @NotNull ChannelHandlerContext ctx, final @NotNull MqttConnAck connAck) {
+        LOGGER.debug("Read CONNACK {} from {}", connAck, ctx.channel().remoteAddress());
         if (state == null) {
             state = STATE_CLOSED;
             MqttDisconnectUtil.disconnect(ctx.channel(), Mqtt5DisconnectReasonCode.PROTOCOL_ERROR,
@@ -134,6 +136,7 @@ public class MqttDisconnectHandler extends MqttConnectionAwareHandler {
     }
 
     public void disconnect(final @NotNull MqttDisconnect disconnect, final @NotNull CompletableFlow flow) {
+        LOGGER.trace("disconnect: schedule DISCONNECT {}", disconnect);
         if (!clientConfig.executeInEventLoop(() -> writeDisconnect(disconnect, flow))) {
             flow.onError(MqttClientStateExceptions.notConnected());
         }
@@ -143,6 +146,7 @@ public class MqttDisconnectHandler extends MqttConnectionAwareHandler {
         final ChannelHandlerContext ctx = this.ctx;
         if ((ctx != null) && (state == null)) {
             state = STATE_CLOSED;
+            LOGGER.trace("Fire DISCONNECT event {}", disconnect);
             fireDisconnectEvent(ctx.channel(), new MqttDisconnectEvent.ByUser(disconnect, flow));
         } else {
             flow.onError(MqttClientStateExceptions.notConnected());
@@ -158,10 +162,14 @@ public class MqttDisconnectHandler extends MqttConnectionAwareHandler {
         final Channel channel = ctx.channel();
 
         if (disconnectEvent.getSource() == MqttDisconnectSource.SERVER) {
+            LOGGER.debug("OnDisconnectedEvent: server closed connection: source: {}, cause: {}, remote address: {}",
+                    disconnectEvent.getSource(), disconnectEvent.getCause(), ctx.channel().remoteAddress());
             disconnected(channel, disconnectEvent);
             channel.close();
             return;
         }
+        LOGGER.debug("OnDisconnectedEvent: source: {}, cause: {}", disconnectEvent.getSource(),
+                disconnectEvent.getCause());
 
         MqttDisconnect disconnect = disconnectEvent.getDisconnect();
         if (disconnect != null) {
@@ -182,31 +190,44 @@ public class MqttDisconnectHandler extends MqttConnectionAwareHandler {
 
             if (disconnectEvent instanceof MqttDisconnectEvent.ByUser) {
                 final MqttDisconnectEvent.ByUser disconnectEventByUser = (MqttDisconnectEvent.ByUser) disconnectEvent;
+                LOGGER.debug("Write DISCONNECT (by user) {} to {}", disconnect, ctx.channel().remoteAddress());
                 ctx.writeAndFlush(disconnect).addListener(f -> {
                     if (f.isSuccess()) {
                         ((DuplexChannel) channel).shutdownOutput().addListener(cf -> {
                             if (cf.isSuccess()) {
+                                LOGGER.trace("DISCONNECT successful");
                                 state = new DisconnectingState(channel, disconnectEventByUser);
                             } else {
+                                LOGGER.debug("DISCONNECT failed: {}, remote address {}", cf.cause(), ctx.channel().remoteAddress());
                                 disconnected(channel, disconnectEvent);
                                 disconnectEventByUser.getFlow().onError(new ConnectionClosedException(cf.cause()));
                             }
                         });
                     } else {
+                        LOGGER.debug("DISCONNECT failed: {}, remote address {}", f.cause(), ctx.channel().remoteAddress());
                         disconnected(channel, disconnectEvent);
                         disconnectEventByUser.getFlow().onError(new ConnectionClosedException(f.cause()));
                     }
                 });
 
             } else if (clientConfig.getMqttVersion() == MqttVersion.MQTT_5_0) {
+                LOGGER.debug("Write DISCONNECT {} to {}", disconnect, ctx.channel().remoteAddress());
                 ctx.writeAndFlush(disconnect)
-                        .addListener(f -> channel.close().addListener(cf -> disconnected(channel, disconnectEvent)));
+                        .addListener(f -> channel.close().addListener(cf -> {
+                            LOGGER.trace("DISCONNECT done");
+                            disconnected(channel, disconnectEvent);}));
 
             } else {
-                channel.close().addListener(cf -> disconnected(channel, disconnectEvent));
+                LOGGER.debug("Close channel (DISCONNECT) {} to {}", disconnect, ctx.channel().remoteAddress());
+                channel.close().addListener(cf -> {
+                    LOGGER.trace("DISCONNECT done");
+                    disconnected(channel, disconnectEvent);});
             }
         } else {
-            channel.close().addListener(cf -> disconnected(channel, disconnectEvent));
+            LOGGER.debug("Close channel (DISCONNECT) to {}", ctx.channel().remoteAddress());
+            channel.close().addListener(cf -> {
+                LOGGER.trace("DISCONNECT done");
+                disconnected(channel, disconnectEvent);});
         }
     }
 
